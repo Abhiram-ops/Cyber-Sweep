@@ -1,0 +1,6 @@
+2025-07-15 19:19:08,575 - Domain resolution failed: [Errno 11001] getaddrinfo failed
+2025-07-15 19:19:09,486 - Fetched headers for http://testphp.vulnweb.com/
+2025-07-15 19:24:50,189 - Domain resolution failed: [Errno 11001] getaddrinfo failed
+2025-07-15 19:24:52,911 - Failed to fetch headers using requests: HTTPConnectionPool(host='ss', port=80): Max retries exceeded with url: / (Caused by NameResolutionError("<urllib3.connection.HTTPConnection object at 0x00000266E25CFEC0>: Failed to resolve 'ss' ([Errno 11001] getaddrinfo failed)"))
+2025-07-15 19:24:52,913 - Header fetch failed: nonnumeric port: '//ss'
+2025-07-15 19:24:55,615 - Vulnerability check failed: HTTPConnectionPool(host='ss', port=80): Max retries exceeded with url: / (Caused by NameResolutionError("<urllib3.connection.HTTPConnection object at 0x00000266E2604560>: Failed to resolve 'ss' ([Errno 11001] getaddrinfo failed)"))
