@@ -9,11 +9,9 @@ from scapy.all import ARP, Ether, srp
 from cryptography.fernet import Fernet
 from bs4 import BeautifulSoup
 from datetime import datetime
+from fpdf import FPDF
 from PyQt5.QtWidgets import QApplication, QWidget, QVBoxLayout, QLabel, QPushButton, QTextEdit, QLineEdit
 from PyQt5.QtCore import Qt
-from PyQt5.QtGui import QTextCursor
-from fpdf import FPDF
-
 
 BANNER = r'''
 ░█████╗░░██████╗░██╗░░░░░░░██╗███████╗███████╗██████╗░
@@ -22,9 +20,39 @@ BANNER = r'''
 ██║░░██╗░╚═══██╗░░████╔═████║░██╔══╝░░██╔══╝░░██╔═══╝░
 ╚█████╔╝██████╔╝░░╚██╔╝░╚██╔╝░███████╗███████╗██║░░░░░
 ░╚════╝░╚═════╝░░░░╚═╝░░░╚═╝░░╚══════╝╚══════╝╚═╝░░░░░
-
                 CyberSweep
 '''
+
+class ReportGenerator:
+    def __init__(self, filename="CyberSweep_Report.pdf"):
+        self.pdf = FPDF()
+        self.filename = filename
+
+    def header(self):
+        self.pdf.set_font("Arial", "B", 16)
+        self.pdf.cell(200, 10, "CyberSweep Scan Report", ln=True, align="C")
+        self.pdf.set_font("Arial", "", 12)
+        self.pdf.cell(200, 10, f"Generated on: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}", ln=True, align="C")
+        self.pdf.ln(10)
+
+    def add_section(self, title, content):
+        self.pdf.set_font("Arial", "B", 14)
+        self.pdf.cell(200, 10, title, ln=True)
+        self.pdf.set_font("Arial", "", 12)
+        if isinstance(content, list):
+            for line in content:
+                self.pdf.multi_cell(0, 10, str(line))
+        else:
+            self.pdf.multi_cell(0, 10, str(content))
+        self.pdf.ln(5)
+
+    def generate(self, data):
+        self.pdf.add_page()
+        self.header()
+        for section, content in data.items():
+            self.add_section(section, content)
+        self.pdf.output(self.filename)
+
 
 def resolve_ip(target):
     try:
@@ -39,14 +67,14 @@ def scan_ports(target):
     print("[~] Scanning ports using Nmap...")
     open_ports = []
     try:
-        nm = nmap.PortScanner()
+        nm = nmap.PortScanner(nmap_search_path=(r"C:\Program Files (x86)\Nmap",))
         nm.scan(target, '1-1000')
         for proto in nm[target].all_protocols():
             ports = nm[target][proto].keys()
             open_ports.extend(ports)
-        print(f"[+] Open Ports: {open_ports}")
     except Exception as e:
         print(f"[-] Nmap port scanning failed: {e}")
+    print(f"[+] Open Ports: {open_ports}")
     return open_ports
 
 def fetch_headers(url):
@@ -61,11 +89,11 @@ def fetch_headers(url):
         return {}
 
 def vulnerability_scan(url):
-    print("[~] Performing basic vulnerability checks using SQLMap...")
+    print("[~] Performing basic vulnerability checks...")
     try:
         sqlmap_cmd = ["sqlmap", "-u", url, "--batch", "--crawl=1"]
         subprocess.run(sqlmap_cmd, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
-        print("[+] SQL injection scan complete.")
+        print("[+] SQL injection scan complete (check sqlmap output).")
     except Exception as e:
         print(f"[-] Vulnerability checks failed: {e}")
 
@@ -88,57 +116,26 @@ def run_scanner(url):
     print(f"[~] Starting scan on {url}\n")
 
     domain = url.replace("https://", "").replace("http://", "").split("/")[0]
+    report_data = {"Target URL": url, "Scan Timestamp": datetime.now().strftime('%Y-%m-%d %H:%M:%S')}
+
     ip = resolve_ip(domain)
+    report_data["Resolved IP"] = ip if ip else "Failed to resolve IP"
 
-    if ip:
-        scan_ports(ip)
-    else:
-        print("[-] Skipping port scan due to DNS failure.")
+    open_ports = scan_ports(ip) if ip else []
+    report_data["Open Ports"] = open_ports
 
-    fetch_headers(url)
+    headers = fetch_headers(url)
+    report_data["Response Headers"] = headers if headers else "Failed to retrieve headers"
+
     vulnerability_scan(url)
+    report_data["Vulnerability Scan"] = "SQLMap scan attempted (check console output for details)"
+
     stealth_network_scan()
-class ReportGenerator:
-    def __init__(self):
-        self.pdf = FPDF()
-        self.pdf.add_page()
-        self.pdf.set_font("Arial", size=12)
+    report_data["Stealth Scan"] = "Scapy stealth scan attempted (check console output for details)"
 
-    def add_title(self, title):
-        self.pdf.set_font("Arial", 'B', size=16)
-        self.pdf.cell(200, 10, txt=title, ln=True, align='C')
-        self.pdf.set_font("Arial", size=12)
-
-    def add_line(self, line):
-        self.pdf.multi_cell(0, 10, txt=line)
-
-    def save(self, filename):
-        self.pdf.output(filename)
-
-def generate_report(scan_data):
     report = ReportGenerator()
-    report.add_title("CyberSweep Scan Report")
-    report.add_line(f"Scan Timestamp: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")
-    report.add_line(f"Target URL: {scan_data['url']}")
-    report.add_line(f"Resolved IP: {scan_data.get('ip', 'N/A')}")
-    report.add_line(f"\nOpen Ports: {scan_data.get('ports', [])}")
-    report.add_line("\nHTTP Headers:")
-    headers = scan_data.get('headers', {})
-    if headers:
-        for k, v in headers.items():
-            report.add_line(f"{k}: {v}")
-    else:
-        report.add_line("No headers retrieved.")
-    report.add_line("\nVulnerability Scan Status: " + scan_data.get('vuln_status', 'Not performed'))
-
-    report.add_line("\nStealth Network Scan:")
-    for host in scan_data.get('stealth_hosts', []):
-        report.add_line(f"Host: {host['ip']} | MAC: {host['mac']}")
-
-    filename = f"CyberSweep_Report_{datetime.now().strftime('%Y%m%d_%H%M%S')}.pdf"
-    report.save(filename)
-    print(f"[+] Report saved as {filename}")
-
+    report.generate(report_data)
+    print("[+] PDF report generated: CyberSweep_Report.pdf")
 
 def cli_mode():
     print(BANNER)
@@ -150,7 +147,7 @@ def gui_mode():
         def __init__(self):
             super().__init__()
             self.setWindowTitle("CyberSweep GUI")
-            self.setGeometry(100, 100, 700, 500)
+            self.setGeometry(100, 100, 600, 400)
             layout = QVBoxLayout()
             self.url_input = QLineEdit(self)
             self.url_input.setPlaceholderText("Enter target URL")
@@ -166,20 +163,16 @@ def gui_mode():
         def start_scan(self):
             url = self.url_input.text()
             if url:
-                self.output.clear()
                 self.output.append(f"[~] Starting scan on {url}\n")
                 threading.Thread(target=self.scan, args=(url,), daemon=True).start()
 
         def scan(self, url):
             sys.stdout = self
-            try:
-                run_scanner(url)
-            finally:
-                sys.stdout = sys.__stdout__
+            run_scanner(url)
+            sys.stdout = sys.__stdout__
 
         def write(self, msg):
-            self.output.moveCursor(QTextCursor.End)
-            self.output.insertPlainText(msg)
+            self.output.append(msg)
 
         def flush(self):
             pass
@@ -194,4 +187,3 @@ if __name__ == "__main__":
         gui_mode()
     else:
         cli_mode()
-        
