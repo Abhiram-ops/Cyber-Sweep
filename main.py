@@ -67,7 +67,8 @@ def scan_ports(target):
     print("[~] Scanning ports using Nmap...")
     open_ports = []
     try:
-        nm = nmap.PortScanner(nmap_search_path=(r"C:\Program Files (x86)\Nmap",))
+        nm = nmap.PortScanner(nmap_search_path=(r"C:\\Program Files (x86)\\Nmap\\nmap.exe",))
+
         nm.scan(target, '1-1000')
         for proto in nm[target].all_protocols():
             ports = nm[target][proto].keys()
