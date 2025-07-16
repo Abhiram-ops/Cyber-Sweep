@@ -194,4 +194,4 @@ if __name__ == "__main__":
         gui_mode()
     else:
         cli_mode()
-        a9f1f25 (Initial commit)
+        a9f1f25 (Initial commit) # type: ignore
