@@ -10,10 +10,10 @@ from cryptography.fernet import Fernet
 from bs4 import BeautifulSoup
 from datetime import datetime
 from PyQt5.QtWidgets import QApplication, QWidget, QVBoxLayout, QLabel, QPushButton, QTextEdit, QLineEdit
-from PyQt5.QtCore import Qt, QMetaType, QTextCursor
+from PyQt5.QtCore import Qt
+from PyQt5.QtGui import QTextCursor
+from fpdf import FPDF
 
-# Fix QTextCursor warning
-QMetaType.registerType(QTextCursor)
 
 BANNER = r'''
 ░█████╗░░██████╗░██╗░░░░░░░██╗███████╗███████╗██████╗░
@@ -23,7 +23,7 @@ BANNER = r'''
 ╚█████╔╝██████╔╝░░╚██╔╝░╚██╔╝░███████╗███████╗██║░░░░░
 ░╚════╝░╚═════╝░░░░╚═╝░░░╚═╝░░╚══════╝╚══════╝╚═╝░░░░░
 
-                    CyberSweep
+                CyberSweep
 '''
 
 def resolve_ip(target):
@@ -61,11 +61,11 @@ def fetch_headers(url):
         return {}
 
 def vulnerability_scan(url):
-    print("[~] Performing basic vulnerability checks...")
+    print("[~] Performing basic vulnerability checks using SQLMap...")
     try:
         sqlmap_cmd = ["sqlmap", "-u", url, "--batch", "--crawl=1"]
         subprocess.run(sqlmap_cmd, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
-        print("[+] SQL injection scan complete (check sqlmap output).")
+        print("[+] SQL injection scan complete.")
     except Exception as e:
         print(f"[-] Vulnerability checks failed: {e}")
 
@@ -86,9 +86,10 @@ def run_scanner(url):
     print(BANNER)
     print(f"Enter the target URL (e.g. http://example.com): {url}\n")
     print(f"[~] Starting scan on {url}\n")
-    domain = url.replace("https://", "").replace("http://", "").split("/")[0]
 
+    domain = url.replace("https://", "").replace("http://", "").split("/")[0]
     ip = resolve_ip(domain)
+
     if ip:
         scan_ports(ip)
     else:
@@ -97,6 +98,47 @@ def run_scanner(url):
     fetch_headers(url)
     vulnerability_scan(url)
     stealth_network_scan()
+class ReportGenerator:
+    def __init__(self):
+        self.pdf = FPDF()
+        self.pdf.add_page()
+        self.pdf.set_font("Arial", size=12)
+
+    def add_title(self, title):
+        self.pdf.set_font("Arial", 'B', size=16)
+        self.pdf.cell(200, 10, txt=title, ln=True, align='C')
+        self.pdf.set_font("Arial", size=12)
+
+    def add_line(self, line):
+        self.pdf.multi_cell(0, 10, txt=line)
+
+    def save(self, filename):
+        self.pdf.output(filename)
+
+def generate_report(scan_data):
+    report = ReportGenerator()
+    report.add_title("CyberSweep Scan Report")
+    report.add_line(f"Scan Timestamp: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")
+    report.add_line(f"Target URL: {scan_data['url']}")
+    report.add_line(f"Resolved IP: {scan_data.get('ip', 'N/A')}")
+    report.add_line(f"\nOpen Ports: {scan_data.get('ports', [])}")
+    report.add_line("\nHTTP Headers:")
+    headers = scan_data.get('headers', {})
+    if headers:
+        for k, v in headers.items():
+            report.add_line(f"{k}: {v}")
+    else:
+        report.add_line("No headers retrieved.")
+    report.add_line("\nVulnerability Scan Status: " + scan_data.get('vuln_status', 'Not performed'))
+
+    report.add_line("\nStealth Network Scan:")
+    for host in scan_data.get('stealth_hosts', []):
+        report.add_line(f"Host: {host['ip']} | MAC: {host['mac']}")
+
+    filename = f"CyberSweep_Report_{datetime.now().strftime('%Y%m%d_%H%M%S')}.pdf"
+    report.save(filename)
+    print(f"[+] Report saved as {filename}")
+
 
 def cli_mode():
     print(BANNER)
@@ -108,36 +150,36 @@ def gui_mode():
         def __init__(self):
             super().__init__()
             self.setWindowTitle("CyberSweep GUI")
-            self.setGeometry(100, 100, 600, 400)
+            self.setGeometry(100, 100, 700, 500)
             layout = QVBoxLayout()
-
             self.url_input = QLineEdit(self)
             self.url_input.setPlaceholderText("Enter target URL")
             layout.addWidget(self.url_input)
-
             self.output = QTextEdit(self)
             self.output.setReadOnly(True)
             layout.addWidget(self.output)
-
             scan_btn = QPushButton("Start Scan", self)
             scan_btn.clicked.connect(self.start_scan)
             layout.addWidget(scan_btn)
-
             self.setLayout(layout)
 
         def start_scan(self):
             url = self.url_input.text()
             if url:
+                self.output.clear()
                 self.output.append(f"[~] Starting scan on {url}\n")
                 threading.Thread(target=self.scan, args=(url,), daemon=True).start()
 
         def scan(self, url):
             sys.stdout = self
-            run_scanner(url)
-            sys.stdout = sys.__stdout__
+            try:
+                run_scanner(url)
+            finally:
+                sys.stdout = sys.__stdout__
 
         def write(self, msg):
-            self.output.append(str(msg))
+            self.output.moveCursor(QTextCursor.End)
+            self.output.insertPlainText(msg)
 
         def flush(self):
             pass
