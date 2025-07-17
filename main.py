@@ -6,6 +6,7 @@ import subprocess
 import threading
 import webbrowser
 import nmap
+import urllib.parse # Added import for URL parsing
 from scapy.all import ARP, Ether, srp
 from cryptography.fernet import Fernet
 from bs4 import BeautifulSoup
@@ -69,6 +70,16 @@ class ReportGenerator:
             self.add_section(section, content)
         self.pdf.output(self.filename)
 
+def is_valid_url(url):
+    """
+    Checks if a given string is a valid URL with a scheme and network location.
+    """
+    try:
+        result = urllib.parse.urlparse(url)
+        return all([result.scheme, result.netloc])
+    except ValueError:
+        return False
+
 def resolve_ip(target):
     try:
         ip = socket.gethostbyname(target)
@@ -124,7 +135,7 @@ def vulnerability_scan_burp(url):
 def stealth_network_scan():
     print("[~] Performing stealth network scan with Scapy...")
     try:
-        target_ip = "192.168.1.1/24"
+        target_ip = "192.168.1.1/24" # This needs to be adjusted to your network range
         arp = ARP(pdst=target_ip)
         ether = Ether(dst="ff:ff:ff:ff:ff:ff")
         packet = ether/arp
@@ -170,6 +181,9 @@ def run_scanner(url, use_burp=False):
 def cli_mode():
     print(BANNER)
     url = input("Enter target URL (e.g. http://example.com): ").strip()
+    if not is_valid_url(url):
+        print("[-] Error: Invalid URL format. Please include http:// or https:// and a valid domain.")
+        return # Exit or re-prompt, depending on desired behavior
     use_burp = input("Use Burp Suite for vulnerability scan? (y/n): ").strip().lower() == "y"
     run_scanner(url, use_burp)
 
@@ -199,10 +213,12 @@ def gui_mode():
 
         def start_scan(self):
             url = self.url_input.text().strip()
-            if url:
-                self.output.append(f"[~] Starting scan on {url}\n")
-                use_burp = self.burp_checkbox.isChecked()
-                threading.Thread(target=self.scan, args=(url, use_burp), daemon=True).start()
+            if not is_valid_url(url):
+                self.output.append("[-] Error: Invalid URL format. Please include http:// or https:// and a valid domain.")
+                return # Stop the scan if URL is invalid
+            self.output.append(f"[~] Starting scan on {url}\n")
+            use_burp = self.burp_checkbox.isChecked()
+            threading.Thread(target=self.scan, args=(url, use_burp), daemon=True).start()
 
         def scan(self, url, use_burp):
             sys.stdout = self
