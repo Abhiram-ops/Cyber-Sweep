@@ -4,18 +4,20 @@ import socket
 import requests
 import subprocess
 import threading
+import webbrowser
 import nmap
 from scapy.all import ARP, Ether, srp
 from cryptography.fernet import Fernet
 from bs4 import BeautifulSoup
 from datetime import datetime
 from fpdf import FPDF
-from PyQt5.QtWidgets import QApplication, QWidget, QVBoxLayout, QLabel, QPushButton, QTextEdit, QLineEdit
+from PyQt5.QtWidgets import (
+    QApplication, QWidget, QVBoxLayout, QLabel, QPushButton, QTextEdit, QLineEdit, QCheckBox
+)
 from PyQt5.QtCore import Qt
 import time
-import itertools
 
-# ========== ASCII Banner ==========
+# ASCII Banner
 BANNER = r'''
 ░█████╗░░██████╗░██╗░░░░░░░██╗███████╗███████╗██████╗░
 ██╔══██╗██╔════╝░██║░░██╗░░██║██╔════╝██╔════╝██╔══██╗
@@ -26,7 +28,6 @@ BANNER = r'''
                 CyberSweep
 '''
 
-# ========== Loading Animation ==========
 def loading_animation(message="Launching CSweep...", duration=3):
     for _ in range(duration * 10):
         for frame in "|/-\\":
@@ -35,11 +36,9 @@ def loading_animation(message="Launching CSweep...", duration=3):
             time.sleep(0.1)
     sys.stdout.write("\r" + " " * (len(message) + 2) + "\r")
 
-# Show animation on CLI launch
-if "--gui" not in sys.argv:
-    loading_animation()
+# Show loading animation before launch
+loading_animation()
 
-# ========== PDF Report Class ==========
 class ReportGenerator:
     def __init__(self, filename="CyberSweep_Report.pdf"):
         self.pdf = FPDF()
@@ -70,8 +69,6 @@ class ReportGenerator:
             self.add_section(section, content)
         self.pdf.output(self.filename)
 
-# ========== Scan Functions ==========
-
 def resolve_ip(target):
     try:
         ip = socket.gethostbyname(target)
@@ -101,19 +98,28 @@ def fetch_headers(url):
         response = requests.get(url, timeout=5)
         for k, v in response.headers.items():
             print(f"    {k}: {v}")
-        return dict(response.headers)
+        return response.headers
     except Exception as e:
         print(f"[-] Could not retrieve headers: {e}")
         return {}
 
-def vulnerability_scan(url):
-    print("[~] Performing basic vulnerability checks...")
+def vulnerability_scan_sqlmap(url):
+    print("[~] Starting SQLMap vulnerability scan...")
     try:
         sqlmap_cmd = ["sqlmap", "-u", url, "--batch", "--crawl=1"]
-        subprocess.run(sqlmap_cmd, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
-        print("[+] SQL injection scan complete (check sqlmap output).")
+        subprocess.run(sqlmap_cmd)
+        print("[+] SQLMap scan complete.")
     except Exception as e:
-        print(f"[-] Vulnerability checks failed: {e}")
+        print(f"[-] SQLMap scan failed: {e}")
+
+def vulnerability_scan_burp(url):
+    print("[~] Opening browser via Burp Suite proxy (127.0.0.1:8080)...")
+    try:
+        proxy_url = f"http://127.0.0.1:8080/{url.replace('http://', '').replace('https://', '')}"
+        webbrowser.open(proxy_url)
+        print("[+] Burp-assisted scan started in your browser.")
+    except Exception as e:
+        print(f"[-] Burp-assisted scan failed: {e}")
 
 def stealth_network_scan():
     print("[~] Performing stealth network scan with Scapy...")
@@ -128,39 +134,45 @@ def stealth_network_scan():
     except Exception as e:
         print(f"[-] Scapy scan failed: {e}")
 
-def run_scanner(url):
+def run_scanner(url, use_burp=False):
     print(BANNER)
-    print(f"[~] Starting scan on {url}\n")
+    print(f"Target: {url}\n")
 
     domain = url.replace("https://", "").replace("http://", "").split("/")[0]
-    report_data = {"Target URL": url, "Scan Timestamp": datetime.now().strftime('%Y-%m-%d %H:%M:%S')}
+    report_data = {
+        "Target URL": url,
+        "Scan Timestamp": datetime.now().strftime('%Y-%m-%d %H:%M:%S')
+    }
 
     ip = resolve_ip(domain)
-    report_data["Resolved IP"] = ip if ip else "Failed to resolve IP"
+    report_data["Resolved IP"] = ip if ip else "Failed"
 
     open_ports = scan_ports(ip) if ip else []
     report_data["Open Ports"] = open_ports
 
     headers = fetch_headers(url)
-    report_data["Response Headers"] = headers if headers else "Failed to retrieve headers"
+    report_data["Response Headers"] = headers if headers else "Failed"
 
-    vulnerability_scan(url)
-    report_data["Vulnerability Scan"] = "SQLMap scan attempted (check console output for details)"
+    if use_burp:
+        vulnerability_scan_burp(url)
+        report_data["Vulnerability Scan"] = "Burp-assisted scan initiated (manual interception recommended)."
+    else:
+        vulnerability_scan_sqlmap(url)
+        report_data["Vulnerability Scan"] = "SQLMap scan attempted."
 
     stealth_network_scan()
-    report_data["Stealth Scan"] = "Scapy stealth scan attempted (check console output for details)"
+    report_data["Stealth Scan"] = "Scapy scan attempted."
 
     report = ReportGenerator()
     report.generate(report_data)
     print("[+] PDF report generated: CyberSweep_Report.pdf")
 
-# ========== CLI Mode ==========
 def cli_mode():
     print(BANNER)
-    url = input("Enter the target URL (e.g. http://example.com): ")
-    run_scanner(url)
+    url = input("Enter target URL (e.g. http://example.com): ").strip()
+    use_burp = input("Use Burp Suite for vulnerability scan? (y/n): ").strip().lower() == "y"
+    run_scanner(url, use_burp)
 
-# ========== GUI Mode ==========
 def gui_mode():
     class ScannerApp(QWidget):
         def __init__(self):
@@ -168,26 +180,33 @@ def gui_mode():
             self.setWindowTitle("CyberSweep GUI")
             self.setGeometry(100, 100, 600, 400)
             layout = QVBoxLayout()
+
             self.url_input = QLineEdit(self)
             self.url_input.setPlaceholderText("Enter target URL")
             layout.addWidget(self.url_input)
+
+            self.burp_checkbox = QCheckBox("Use Burp Suite for vulnerability scan")
+            layout.addWidget(self.burp_checkbox)
+
             self.output = QTextEdit(self)
             self.output.setReadOnly(True)
             layout.addWidget(self.output)
+
             scan_btn = QPushButton("Start Scan", self)
             scan_btn.clicked.connect(self.start_scan)
             layout.addWidget(scan_btn)
             self.setLayout(layout)
 
         def start_scan(self):
-            url = self.url_input.text()
+            url = self.url_input.text().strip()
             if url:
                 self.output.append(f"[~] Starting scan on {url}\n")
-                threading.Thread(target=self.scan, args=(url,), daemon=True).start()
+                use_burp = self.burp_checkbox.isChecked()
+                threading.Thread(target=self.scan, args=(url, use_burp), daemon=True).start()
 
-        def scan(self, url):
+        def scan(self, url, use_burp):
             sys.stdout = self
-            run_scanner(url)
+            run_scanner(url, use_burp)
             sys.stdout = sys.__stdout__
 
         def write(self, msg):
@@ -201,7 +220,6 @@ def gui_mode():
     win.show()
     sys.exit(app.exec_())
 
-# ========== Entry Point ==========
 if __name__ == "__main__":
     if "--gui" in sys.argv:
         gui_mode()
