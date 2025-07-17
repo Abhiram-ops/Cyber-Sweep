@@ -102,7 +102,7 @@ To bundle into an executable:
 ```bash
 pyinstaller --onefile --noconsole main.py
 ```
-
+To download the direct file click on Cybersweep_installer.exe
 ---
 
 ## 📘 Example PDF Report
