@@ -12,7 +12,10 @@ from datetime import datetime
 from fpdf import FPDF
 from PyQt5.QtWidgets import QApplication, QWidget, QVBoxLayout, QLabel, QPushButton, QTextEdit, QLineEdit
 from PyQt5.QtCore import Qt
+import time
+import itertools
 
+# ========== ASCII Banner ==========
 BANNER = r'''
 ░█████╗░░██████╗░██╗░░░░░░░██╗███████╗███████╗██████╗░
 ██╔══██╗██╔════╝░██║░░██╗░░██║██╔════╝██╔════╝██╔══██╗
@@ -22,10 +25,8 @@ BANNER = r'''
 ░╚════╝░╚═════╝░░░░╚═╝░░░╚═╝░░╚══════╝╚══════╝╚═╝░░░░░
                 CyberSweep
 '''
-import time
-import sys
-import itertools
 
+# ========== Loading Animation ==========
 def loading_animation(message="Launching CSweep...", duration=3):
     for _ in range(duration * 10):
         for frame in "|/-\\":
@@ -34,9 +35,11 @@ def loading_animation(message="Launching CSweep...", duration=3):
             time.sleep(0.1)
     sys.stdout.write("\r" + " " * (len(message) + 2) + "\r")
 
-# Show loading animation before launching GUI
-loading_animation()
+# Show animation on CLI launch
+if "--gui" not in sys.argv:
+    loading_animation()
 
+# ========== PDF Report Class ==========
 class ReportGenerator:
     def __init__(self, filename="CyberSweep_Report.pdf"):
         self.pdf = FPDF()
@@ -67,6 +70,7 @@ class ReportGenerator:
             self.add_section(section, content)
         self.pdf.output(self.filename)
 
+# ========== Scan Functions ==========
 
 def resolve_ip(target):
     try:
@@ -81,7 +85,7 @@ def scan_ports(target):
     print("[~] Scanning ports using Nmap...")
     open_ports = []
     try:
-        
+        nm = nmap.PortScanner()
         nm.scan(target, '1-1000')
         for proto in nm[target].all_protocols():
             ports = nm[target][proto].keys()
@@ -97,7 +101,7 @@ def fetch_headers(url):
         response = requests.get(url, timeout=5)
         for k, v in response.headers.items():
             print(f"    {k}: {v}")
-        return response.headers
+        return dict(response.headers)
     except Exception as e:
         print(f"[-] Could not retrieve headers: {e}")
         return {}
@@ -126,7 +130,6 @@ def stealth_network_scan():
 
 def run_scanner(url):
     print(BANNER)
-    print(f"Enter the target URL (e.g. http://example.com): {url}\n")
     print(f"[~] Starting scan on {url}\n")
 
     domain = url.replace("https://", "").replace("http://", "").split("/")[0]
@@ -151,11 +154,13 @@ def run_scanner(url):
     report.generate(report_data)
     print("[+] PDF report generated: CyberSweep_Report.pdf")
 
+# ========== CLI Mode ==========
 def cli_mode():
     print(BANNER)
     url = input("Enter the target URL (e.g. http://example.com): ")
     run_scanner(url)
 
+# ========== GUI Mode ==========
 def gui_mode():
     class ScannerApp(QWidget):
         def __init__(self):
@@ -196,6 +201,7 @@ def gui_mode():
     win.show()
     sys.exit(app.exec_())
 
+# ========== Entry Point ==========
 if __name__ == "__main__":
     if "--gui" in sys.argv:
         gui_mode()
