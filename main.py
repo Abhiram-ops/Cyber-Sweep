@@ -22,6 +22,20 @@ BANNER = r'''
 ░╚════╝░╚═════╝░░░░╚═╝░░░╚═╝░░╚══════╝╚══════╝╚═╝░░░░░
                 CyberSweep
 '''
+import time
+import sys
+import itertools
+
+def loading_animation(message="Launching CSweep...", duration=3):
+    for _ in range(duration * 10):
+        for frame in "|/-\\":
+            sys.stdout.write(f"\r{message} {frame}")
+            sys.stdout.flush()
+            time.sleep(0.1)
+    sys.stdout.write("\r" + " " * (len(message) + 2) + "\r")
+
+# Show loading animation before launching GUI
+loading_animation()
 
 class ReportGenerator:
     def __init__(self, filename="CyberSweep_Report.pdf"):
